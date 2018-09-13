@@ -53,7 +53,8 @@
 #include "usb_device.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "FreeRTOS_IP.h"
+#include "FreeRTOS_Sockets.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -61,7 +62,24 @@ osThreadId defaultTaskHandle;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+/* Private variables ---------------------------------------------------------*/
+#define mainHOST_NAME					"RTOSDemo"
+#define mainDEVICE_NICK_NAME			"stm32"
 
+#ifndef configIPINIT_TASK_STACK_SIZE
+	#define configIPINIT_TASK_STACK_SIZE ( 4 * configMINIMAL_STACK_SIZE )
+#endif
+/* The MAC address array is not declared const as the MAC address will
+normally be read from an EEPROM and not hard coded (in real deployed
+applications).*/
+static uint8_t ucMACAddress[ 6 ] = { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55 };
+
+static const uint8_t ucIPAddress[ 4 ] = { 10, 10, 10, 200 };
+static const uint8_t ucNetMask[ 4 ] = { 255, 0, 0, 0 };
+static const uint8_t ucGatewayAddress[ 4 ] = { 10, 10, 10, 1 };
+
+/* The following is the address of an OpenDNS server. */
+static const uint8_t ucDNSServerAddress[ 4 ] = { 208, 67, 222, 222 };
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -108,7 +126,11 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-
+	FreeRTOS_IPInit( ucIPAddress,
+				   ucNetMask,
+				   ucGatewayAddress,
+				   ucDNSServerAddress,
+				   ucMACAddress );
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -243,7 +265,36 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+const char *pcApplicationHostnameHook( void )
+{
+	/* Assign the name "rtosdemo" to this network node.  This function will be
+	called during the DHCP: the machine will be registered with an IP address
+	plus this name. */
+	return mainHOST_NAME;
+}
 
+BaseType_t xApplicationDNSQueryHook( const char *pcName )
+{
+BaseType_t xReturn;
+
+	/* Determine if a name lookup is for this node.  Two names are given
+	to this node: that returned by pcApplicationHostnameHook() and that set
+	by mainDEVICE_NICK_NAME. */
+	if( strcasecmp( pcName, pcApplicationHostnameHook() ) == 0 )
+	{
+		xReturn = pdPASS;
+	}
+	else if( strcasecmp( pcName, mainDEVICE_NICK_NAME ) == 0 )
+	{
+		xReturn = pdPASS;
+	}
+	else
+	{
+		xReturn = pdFAIL;
+	}
+
+	return xReturn;
+}
 /* USER CODE END 4 */
 
 /* StartDefaultTask function */
